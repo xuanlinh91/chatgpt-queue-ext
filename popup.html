@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ChatGPTQueue</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+    />
+    <style>
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #ffffff;
+        color: #1a1a1a;
+      }
+
+      .container {
+        width: 360px;
+        background-color: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      }
+
+      .logo {
+        padding: 24px 0 16px;
+        background: linear-gradient(to bottom, #f8fafc, #ffffff);
+      }
+
+      .logo img {
+        width: 180px;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+      }
+
+      .content {
+        padding: 24px 32px;
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 24px;
+        text-align: center;
+      }
+
+      .collapsible-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #3b82f6;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background-color: #f8fafc;
+        margin: 16px 0;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+
+      .collapsible-link:hover {
+        background-color: #f1f5f9;
+        transform: translateY(-1px);
+      }
+
+      .collapsible-link i {
+        font-size: 16px;
+      }
+
+      .collapsible-content {
+        background-color: #f8fafc;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 8px;
+        border: 1px solid #e2e8f0;
+      }
+
+      #bulkQueueInput {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        resize: vertical;
+        min-height: 80px;
+        background-color: white;
+        transition: all 0.2s ease;
+      }
+
+      #bulkQueueInput:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+
+      #inputDescription {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #64748b;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        width: auto;
+        font-size: 14px;
+        text-decoration: none;
+        margin: 0 auto;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+      }
+
+      #support {
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        justify-content: center;
+        gap: 16px;
+        padding: 20px;
+        background-color: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      #support a {
+        color: #64748b;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 500;
+        transition: color 0.2s ease;
+      }
+
+      #support a:hover {
+        color: #3b82f6;
+      }
+
+      #promptDelay {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+
+      .setting-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 500;
+      }
+
+      #queueButton {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        font-size: 14px;
+        margin-top: 16px;
+      }
+
+      #queueButton:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* Footer note small grey text */
+      .footer-note {
+        text-align: center;
+        padding: 0 0 16px;
+        margin-top: 10px;
+      }
+
+      .footer-note a {
+        color: #94a3b8;
+        font-size: 12px;
+        text-decoration: none;
+      }
+
+      .footer-note a:hover {
+        color: #3b82f6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="logo">
+        <img src="logo.png" alt="ChatGPT Queue Logo" />
+      </div>
+      <div class="content">
+        <h1>ChatGPT Queue</h1>
+        <div id="userEmail" style="display: none;"></div>
+        <div id="signOutButton" class="hidden"></div>
+        <div id="pro-features">
+          <div
+            id="promptChainLink"
+            class="collapsible-link"
+          >
+            <i class="fas fa-layer-group"></i>
+            Add prompts in bulk
+          </div>
+          <div id="bulkInputContainer" style="display: none">
+            <textarea
+              id="bulkQueueInput"
+              placeholder="Ex: prompt1~prompt2~prompt3~prompt4~prompt5"
+            ></textarea>
+            <div id="inputDescription">Separate multiple prompts with "~"</div>
+            <button id="queueButton">Queue Prompts</button>
+          </div>
+          <div
+            id="delaySettingsLink"
+            class="collapsible-link"
+          >
+            <i class="fas fa-clock"></i>
+            Delay settings
+          </div>
+          <div id="delaySettingsContainer" style="display: none">
+            <div class="setting-group">
+              <label for="promptDelay">Delay between prompts (seconds)</label>
+              <input 
+                type="number" 
+                id="promptDelay" 
+                min="0" 
+                max="300" 
+                value="0" 
+                step="1"
+                placeholder="0"
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="support">
+        <a href="https://www.youtube.com/watch?v=TQKBUDKqd_8" target="_blank">
+          Get Started
+        </a>
+        <a href="https://github.com/MIATECHPARTNERS/ChatGPTQueuePrompts/blob/main/README.md" target="_blank">
+          Prompt Library
+        </a>
+        <a href="https://x.com/indiejaycodes" target="_blank">
+          Support
+        </a>
+      </div>
+
+      <div class="footer-note">
+        <a href="https://www.agenticworkers.com/prompt-library/my-templates" target="_blank">
+          Store your prompts with Agentic Workers
+        </a>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
