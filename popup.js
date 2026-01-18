@@ -88,4 +88,60 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
   }
+
+  // Enable download responses section
+  const downloadResponsesLink = document.getElementById("downloadResponsesLink");
+  const downloadResponsesContainer = document.getElementById("downloadResponsesContainer");
+  const downloadButton = document.getElementById("downloadButton");
+
+  if (downloadResponsesLink) {
+    downloadResponsesLink.addEventListener("click", function () {
+      if (downloadResponsesContainer.style.display === "none") {
+        downloadResponsesContainer.style.display = "block";
+      } else {
+        downloadResponsesContainer.style.display = "none";
+      }
+    });
+  }
+
+  // Handle download button click
+  if (downloadButton) {
+    downloadButton.addEventListener("click", function () {
+      chrome.storage.local.get(['chatGptResponses'], function (result) {
+        const responses = result.chatGptResponses || [];
+
+        if (responses.length === 0) {
+          alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
+          return;
+        }
+
+        // Create text content from responses
+        let textContent = `ChatGPT Response History\n`;
+        textContent += `Generated: ${new Date().toLocaleString()}\n`;
+        textContent += `Total Responses: ${responses.length}\n`;
+        textContent += `${"=".repeat(80)}\n\n`;
+
+        responses.forEach((response, index) => {
+          textContent += `Response ${index + 1}\n`;
+          textContent += `Timestamp: ${new Date(response.timestamp).toLocaleString()}\n`;
+          textContent += `${"-".repeat(80)}\n`;
+          textContent += `${response.text}\n`;
+          textContent += `\n${"=".repeat(80)}\n\n`;
+        });
+
+        // Create a blob and download it
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chatgpt-responses-${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log("Downloaded", responses.length, "responses");
+      });
+    });
+  }
 });

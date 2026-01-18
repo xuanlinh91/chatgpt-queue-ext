@@ -8,6 +8,8 @@ let userTyping = false;
 let currentTypedMessage = "";
 let lastMessageTime = 0;
 let countdownInterval = null;
+let chatGptResponses = [];
+let lastResponseElement = null;
 
 // Add this utility function near the top of the file
 function escapeHtml(unsafe) {
@@ -29,6 +31,36 @@ function setUniqueEventListener(element, eventType, listener, options) {
   if (!elementListeners.has(eventType)) {
     element.addEventListener(eventType, listener, options);
     elementListeners.set(eventType, listener);
+  }
+}
+
+// Function to save ChatGPT response to history (max 20 responses)
+async function saveResponseToHistory(responseText) {
+  if (!responseText || responseText.trim().length === 0) {
+    return;
+  }
+
+  try {
+    // Get existing responses from storage
+    const result = await chrome.storage.local.get(['chatGptResponses']);
+    let responses = result.chatGptResponses || [];
+
+    // Add new response with timestamp
+    responses.push({
+      text: responseText,
+      timestamp: new Date().toISOString()
+    });
+
+    // Keep only the last 20 responses
+    if (responses.length > 20) {
+      responses = responses.slice(-20);
+    }
+
+    // Save back to storage
+    await chrome.storage.local.set({ chatGptResponses: responses });
+    console.log('[RESPONSE HISTORY] Saved response. Total responses:', responses.length);
+  } catch (error) {
+    console.error('[RESPONSE HISTORY] Error saving response:', error);
   }
 }
 
@@ -490,21 +522,41 @@ async function processMessageQueue() {
 function setupContinueButtonWatcher() {
   let lastClickTime = 0;
   const CLICK_COOLDOWN = 2000; // 2 seconds cooldown between clicks
+  let wasGenerating = false;
 
   const observer = new MutationObserver((mutations) => {
     const now = Date.now();
-    if (now - lastClickTime < CLICK_COOLDOWN) {
-      return; // Skip if we're still in cooldown
+
+    // Check for continue button
+    if (now - lastClickTime >= CLICK_COOLDOWN) {
+      const continueButton = Array.from(
+        document.querySelectorAll("button.btn")
+      ).find((btn) => btn.textContent.includes("Continue generating"));
+
+      if (continueButton) {
+        console.log("Continue button found, clicking automatically");
+        continueButton.click();
+        lastClickTime = now;
+      }
     }
 
-    const continueButton = Array.from(
-      document.querySelectorAll("button.btn")
-    ).find((btn) => btn.textContent.includes("Continue generating"));
+    // Check if ChatGPT is currently generating
+    const stopButton =
+      document.querySelector('button[data-testid="stop-button"]') ||
+      document.querySelector('button[aria-label="Stop generating"]') ||
+      document.querySelector('button[data-testid="fruitjuice-stop-button"]') ||
+      document.querySelector('button[aria-label="Stop streaming"]');
 
-    if (continueButton) {
-      console.log("Continue button found, clicking automatically");
-      continueButton.click();
-      lastClickTime = now;
+    if (stopButton) {
+      wasGenerating = true;
+    } else if (wasGenerating) {
+      // ChatGPT just finished generating
+      wasGenerating = false;
+
+      // Wait a bit for the DOM to settle, then capture the response
+      setTimeout(() => {
+        captureLastResponse();
+      }, 500);
     }
   });
 
@@ -518,6 +570,42 @@ function setupContinueButtonWatcher() {
   });
 
   return observer;
+}
+
+// Function to capture the last ChatGPT response
+function captureLastResponse() {
+  try {
+    // Find all assistant message containers
+    // ChatGPT uses data-message-author-role="assistant" for AI responses
+    const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
+
+    if (assistantMessages.length === 0) {
+      console.log('[RESPONSE HISTORY] No assistant messages found');
+      return;
+    }
+
+    // Get the last assistant message
+    const lastMessage = assistantMessages[assistantMessages.length - 1];
+
+    // Avoid capturing the same response multiple times
+    if (lastMessage === lastResponseElement) {
+      console.log('[RESPONSE HISTORY] Response already captured');
+      return;
+    }
+
+    lastResponseElement = lastMessage;
+
+    // Extract the text content from the message
+    // The actual text is usually in a div with class containing "markdown" or direct text content
+    const messageText = lastMessage.innerText || lastMessage.textContent || '';
+
+    if (messageText && messageText.trim().length > 0) {
+      console.log('[RESPONSE HISTORY] Capturing response:', messageText.substring(0, 100) + '...');
+      saveResponseToHistory(messageText.trim());
+    }
+  } catch (error) {
+    console.error('[RESPONSE HISTORY] Error capturing response:', error);
+  }
 }
 
 // Utility: returns the current prompt input element (textarea or contentEditable div)
