@@ -60,6 +60,9 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "openPopup") {
     chrome.action.openPopup();
+  } else if (request.action === "getTabId") {
+    // Return the tab ID to the content script
+    sendResponse({ tabId: sender.tab?.id });
   }
   return true; // Keep the message channel open for async responses
 });

@@ -10,6 +10,7 @@ let lastMessageTime = 0;
 let countdownInterval = null;
 let chatGptResponses = [];
 let lastResponseElement = null;
+let currentTabId = null;
 
 // Add this utility function near the top of the file
 function escapeHtml(unsafe) {
@@ -40,10 +41,24 @@ async function saveResponseToHistory(responseText) {
     return;
   }
 
+  // Get tab ID if not already retrieved
+  if (currentTabId === null) {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getTabId' });
+      currentTabId = response.tabId;
+      console.log('[RESPONSE HISTORY] Tab ID retrieved:', currentTabId);
+    } catch (error) {
+      console.error('[RESPONSE HISTORY] Error getting tab ID:', error);
+      // Fallback to timestamp-based ID if tab ID is unavailable
+      currentTabId = `fallback_${Date.now()}`;
+    }
+  }
+
   try {
-    // Get existing responses from storage
-    const result = await chrome.storage.local.get(['chatGptResponses']);
-    let responses = result.chatGptResponses || [];
+    // Use tab-specific storage key
+    const storageKey = `chatGptResponses_tab${currentTabId}`;
+    const result = await chrome.storage.local.get([storageKey]);
+    let responses = result[storageKey] || [];
 
     // Add new response with timestamp
     responses.push({
@@ -51,14 +66,14 @@ async function saveResponseToHistory(responseText) {
       timestamp: new Date().toISOString()
     });
 
-    // Keep only the last 20 responses
+    // Keep only the last 20 responses per tab
     if (responses.length > 20) {
       responses = responses.slice(-20);
     }
 
-    // Save back to storage
-    await chrome.storage.local.set({ chatGptResponses: responses });
-    console.log('[RESPONSE HISTORY] Saved response. Total responses:', responses.length);
+    // Save back to storage with tab-specific key
+    await chrome.storage.local.set({ [storageKey]: responses });
+    console.log('[RESPONSE HISTORY] Saved response to', storageKey, '. Total responses:', responses.length);
   } catch (error) {
     console.error('[RESPONSE HISTORY] Error saving response:', error);
   }

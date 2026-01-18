@@ -89,20 +89,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Enable download responses section
-  const downloadResponsesLink = document.getElementById("downloadResponsesLink");
-  const downloadResponsesContainer = document.getElementById("downloadResponsesContainer");
+  // Download button is now always visible
   const downloadButton = document.getElementById("downloadButton");
-
-  if (downloadResponsesLink) {
-    downloadResponsesLink.addEventListener("click", function () {
-      if (downloadResponsesContainer.style.display === "none") {
-        downloadResponsesContainer.style.display = "block";
-      } else {
-        downloadResponsesContainer.style.display = "none";
-      }
-    });
-  }
 
   // Handle download button click
   if (downloadButton) {
@@ -114,13 +102,36 @@ document.addEventListener("DOMContentLoaded", function () {
       // Ensure the count is within valid range
       responseCount = Math.max(1, Math.min(20, responseCount));
 
-      chrome.storage.local.get(['chatGptResponses'], function (result) {
-        const allResponses = result.chatGptResponses || [];
+      // Get all storage items to find tab-specific response keys
+      chrome.storage.local.get(null, function (allStorage) {
+        // Find all keys that match the pattern chatGptResponses_tab*
+        const tabResponseKeys = Object.keys(allStorage).filter(key =>
+          key.startsWith('chatGptResponses_tab')
+        );
+
+        if (tabResponseKeys.length === 0) {
+          alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
+          return;
+        }
+
+        // Aggregate all responses from all tabs
+        let allResponses = [];
+        tabResponseKeys.forEach(key => {
+          const tabResponses = allStorage[key] || [];
+          allResponses = allResponses.concat(tabResponses);
+        });
 
         if (allResponses.length === 0) {
           alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
           return;
         }
+
+        // Sort by timestamp (oldest to newest)
+        allResponses.sort((a, b) => {
+          const dateA = new Date(a.timestamp);
+          const dateB = new Date(b.timestamp);
+          return dateA - dateB;
+        });
 
         // Get only the latest N responses
         const responses = allResponses.slice(-responseCount);
@@ -145,7 +156,7 @@ document.addEventListener("DOMContentLoaded", function () {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        console.log("Downloaded", responses.length, "responses");
+        console.log("Downloaded", responses.length, "responses from", tabResponseKeys.length, "tab(s)");
       });
     });
   }
