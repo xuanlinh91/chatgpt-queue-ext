@@ -107,26 +107,31 @@ document.addEventListener("DOMContentLoaded", function () {
   // Handle download button click
   if (downloadButton) {
     downloadButton.addEventListener("click", function () {
-      chrome.storage.local.get(['chatGptResponses'], function (result) {
-        const responses = result.chatGptResponses || [];
+      // Get the number of responses to download from the input field
+      const responseCountInput = document.getElementById("responseCount");
+      let responseCount = parseInt(responseCountInput.value) || 1;
 
-        if (responses.length === 0) {
+      // Ensure the count is within valid range
+      responseCount = Math.max(1, Math.min(20, responseCount));
+
+      chrome.storage.local.get(['chatGptResponses'], function (result) {
+        const allResponses = result.chatGptResponses || [];
+
+        if (allResponses.length === 0) {
           alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
           return;
         }
 
-        // Create text content from responses
-        let textContent = `ChatGPT Response History\n`;
-        textContent += `Generated: ${new Date().toLocaleString()}\n`;
-        textContent += `Total Responses: ${responses.length}\n`;
-        textContent += `${"=".repeat(80)}\n\n`;
+        // Get only the latest N responses
+        const responses = allResponses.slice(-responseCount);
+
+        // Create text content from responses (only raw text, no metadata)
+        let textContent = '';
 
         responses.forEach((response, index) => {
-          textContent += `Response ${index + 1}\n`;
-          textContent += `Timestamp: ${new Date(response.timestamp).toLocaleString()}\n`;
-          textContent += `${"-".repeat(80)}\n`;
-          textContent += `${response.text}\n`;
-          textContent += `\n${"=".repeat(80)}\n\n`;
+          // Replace double line breaks with single line breaks inside the response
+          const processedText = response.text.replace(/\n\n/g, '\n');
+          textContent += `${processedText}\n`;
         });
 
         // Create a blob and download it
