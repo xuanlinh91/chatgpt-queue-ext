@@ -89,8 +89,21 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+
   // Download button is now always visible
   const downloadButton = document.getElementById("downloadButton");
+  const responseCountInput = document.getElementById("responseCount");
+
+  // Allow Enter key on input to trigger download
+  if (responseCountInput && downloadButton) {
+    responseCountInput.addEventListener("keypress", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        downloadButton.click();
+      }
+    });
+  }
+
 
   // Handle download button click
   if (downloadButton) {
@@ -102,61 +115,53 @@ document.addEventListener("DOMContentLoaded", function () {
       // Ensure the count is within valid range
       responseCount = Math.max(1, Math.min(20, responseCount));
 
-      // Get all storage items to find tab-specific response keys
-      chrome.storage.local.get(null, function (allStorage) {
-        // Find all keys that match the pattern chatGptResponses_tab*
-        const tabResponseKeys = Object.keys(allStorage).filter(key =>
-          key.startsWith('chatGptResponses_tab')
-        );
+      // Get the current tab to download only its responses
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        const currentTab = tabs[0];
 
-        if (tabResponseKeys.length === 0) {
-          alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
-          return;
-        }
+        // Get the storage key for the current tab
+        const currentTabStorageKey = `chatGptResponses_tab${currentTab.id}`;
 
-        // Aggregate all responses from all tabs
-        let allResponses = [];
-        tabResponseKeys.forEach(key => {
-          const tabResponses = allStorage[key] || [];
-          allResponses = allResponses.concat(tabResponses);
+        chrome.storage.local.get([currentTabStorageKey], function (result) {
+          const responses = result[currentTabStorageKey] || [];
+
+          if (responses.length === 0) {
+            alert("No responses saved yet in this tab. Start chatting with ChatGPT to save responses!");
+            return;
+          }
+
+          // Sort by timestamp (oldest to newest)
+          responses.sort((a, b) => {
+            const dateA = new Date(a.timestamp);
+            const dateB = new Date(b.timestamp);
+            return dateA - dateB;
+          });
+
+          // Get only the latest N responses
+          const latestResponses = responses.slice(-responseCount);
+
+          // Create text content from responses (only raw text, no metadata)
+          let textContent = '';
+
+          latestResponses.forEach((response, index) => {
+            // Replace double line breaks with single line breaks inside the response
+            const processedText = response.text.replace(/\n\n/g, '\n');
+            textContent += `${processedText}\n`;
+          });
+
+          // Create a blob and download it
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `chatgpt-tab${currentTab.id}-responses-${new Date().toISOString().split('T')[0]}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          console.log(`Downloaded ${latestResponses.length} responses from current tab (ID: ${currentTab.id})`);
         });
-
-        if (allResponses.length === 0) {
-          alert("No responses saved yet. Start chatting with ChatGPT to save responses!");
-          return;
-        }
-
-        // Sort by timestamp (oldest to newest)
-        allResponses.sort((a, b) => {
-          const dateA = new Date(a.timestamp);
-          const dateB = new Date(b.timestamp);
-          return dateA - dateB;
-        });
-
-        // Get only the latest N responses
-        const responses = allResponses.slice(-responseCount);
-
-        // Create text content from responses (only raw text, no metadata)
-        let textContent = '';
-
-        responses.forEach((response, index) => {
-          // Replace double line breaks with single line breaks inside the response
-          const processedText = response.text.replace(/\n\n/g, '\n');
-          textContent += `${processedText}\n`;
-        });
-
-        // Create a blob and download it
-        const blob = new Blob([textContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chatgpt-responses-${new Date().toISOString().split('T')[0]}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        console.log("Downloaded", responses.length, "responses from", tabResponseKeys.length, "tab(s)");
       });
     });
   }

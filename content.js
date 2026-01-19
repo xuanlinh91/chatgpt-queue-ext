@@ -12,6 +12,25 @@ let chatGptResponses = [];
 let lastResponseElement = null;
 let currentTabId = null;
 
+// Initialize tab ID immediately when script loads
+(async function initializeTabId() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getTabId' });
+    if (response && response.tabId) {
+      currentTabId = response.tabId;
+      console.log('[RESPONSE HISTORY] Tab ID initialized:', currentTabId);
+    } else {
+      // Fallback to timestamp-based ID if tab ID is unavailable
+      currentTabId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.warn('[RESPONSE HISTORY] Using fallback tab ID:', currentTabId);
+    }
+  } catch (error) {
+    console.error('[RESPONSE HISTORY] Error initializing tab ID:', error);
+    // Fallback to timestamp-based ID with random component
+    currentTabId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+})();
+
 // Add this utility function near the top of the file
 function escapeHtml(unsafe) {
   return unsafe
@@ -41,22 +60,23 @@ async function saveResponseToHistory(responseText) {
     return;
   }
 
-  // Get tab ID if not already retrieved
+  // Wait for tab ID to be initialized if it's not ready yet
+  let retries = 0;
+  while (currentTabId === null && retries < 50) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries++;
+  }
+
   if (currentTabId === null) {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'getTabId' });
-      currentTabId = response.tabId;
-      console.log('[RESPONSE HISTORY] Tab ID retrieved:', currentTabId);
-    } catch (error) {
-      console.error('[RESPONSE HISTORY] Error getting tab ID:', error);
-      // Fallback to timestamp-based ID if tab ID is unavailable
-      currentTabId = `fallback_${Date.now()}`;
-    }
+    console.error('[RESPONSE HISTORY] Tab ID not initialized after waiting');
+    return;
   }
 
   try {
     // Use tab-specific storage key
     const storageKey = `chatGptResponses_tab${currentTabId}`;
+    console.log('[RESPONSE HISTORY] Using storage key:', storageKey);
+
     const result = await chrome.storage.local.get([storageKey]);
     let responses = result[storageKey] || [];
 

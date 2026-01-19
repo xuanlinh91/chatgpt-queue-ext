@@ -62,7 +62,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.action.openPopup();
   } else if (request.action === "getTabId") {
     // Return the tab ID to the content script
-    sendResponse({ tabId: sender.tab?.id });
+    const tabId = sender.tab?.id;
+    console.log('[BACKGROUND] getTabId request received. Tab ID:', tabId, 'Sender:', sender);
+    sendResponse({ tabId: tabId });
   }
   return true; // Keep the message channel open for async responses
 });
@@ -76,4 +78,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       });
     }
   }
+});
+
+// Clean up saved responses when a tab is closed
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  const storageKey = `chatGptResponses_tab${tabId}`;
+  chrome.storage.local.remove(storageKey, () => {
+    console.log(`[BACKGROUND] Cleared responses for closed tab ${tabId}`);
+  });
 });
