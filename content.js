@@ -451,7 +451,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
 
-    const fullText = conversation.join('\n\n');
+    const fullText = conversation.join('\n');
     sendResponse({ conversation: fullText });
   }
   return true; // Keep channel open for async response if needed
