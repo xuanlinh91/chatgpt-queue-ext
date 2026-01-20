@@ -514,7 +514,7 @@ async function processMessageQueue() {
 function setupContinueButtonWatcher() {
   let lastClickTime = 0;
   const CLICK_COOLDOWN = 2000; // 2 seconds cooldown between clicks
-  let wasGenerating = false;
+
 
   const observer = new MutationObserver((mutations) => {
     const now = Date.now();
@@ -532,19 +532,7 @@ function setupContinueButtonWatcher() {
       }
     }
 
-    // Check if ChatGPT is currently generating
-    const stopButton =
-      document.querySelector('button[data-testid="stop-button"]') ||
-      document.querySelector('button[aria-label="Stop generating"]') ||
-      document.querySelector('button[data-testid="fruitjuice-stop-button"]') ||
-      document.querySelector('button[aria-label="Stop streaming"]');
 
-    if (stopButton) {
-      wasGenerating = true;
-    } else if (wasGenerating) {
-      // ChatGPT just finished generating
-      wasGenerating = false;
-    }
   });
 
   // Reduce the scope of what we're observing and optimize the configuration
