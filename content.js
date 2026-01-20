@@ -8,28 +8,7 @@ let userTyping = false;
 let currentTypedMessage = "";
 let lastMessageTime = 0;
 let countdownInterval = null;
-let chatGptResponses = [];
-let lastResponseElement = null;
-let currentTabId = null;
 
-// Initialize tab ID immediately when script loads
-(async function initializeTabId() {
-  try {
-    const response = await chrome.runtime.sendMessage({ action: 'getTabId' });
-    if (response && response.tabId) {
-      currentTabId = response.tabId;
-      console.log('[RESPONSE HISTORY] Tab ID initialized:', currentTabId);
-    } else {
-      // Fallback to timestamp-based ID if tab ID is unavailable
-      currentTabId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.warn('[RESPONSE HISTORY] Using fallback tab ID:', currentTabId);
-    }
-  } catch (error) {
-    console.error('[RESPONSE HISTORY] Error initializing tab ID:', error);
-    // Fallback to timestamp-based ID with random component
-    currentTabId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-})();
 
 // Add this utility function near the top of the file
 function escapeHtml(unsafe) {
@@ -54,50 +33,7 @@ function setUniqueEventListener(element, eventType, listener, options) {
   }
 }
 
-// Function to save ChatGPT response to history (max 20 responses)
-async function saveResponseToHistory(responseText) {
-  if (!responseText || responseText.trim().length === 0) {
-    return;
-  }
 
-  // Wait for tab ID to be initialized if it's not ready yet
-  let retries = 0;
-  while (currentTabId === null && retries < 50) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    retries++;
-  }
-
-  if (currentTabId === null) {
-    console.error('[RESPONSE HISTORY] Tab ID not initialized after waiting');
-    return;
-  }
-
-  try {
-    // Use tab-specific storage key
-    const storageKey = `chatGptResponses_tab${currentTabId}`;
-    console.log('[RESPONSE HISTORY] Using storage key:', storageKey);
-
-    const result = await chrome.storage.local.get([storageKey]);
-    let responses = result[storageKey] || [];
-
-    // Add new response with timestamp
-    responses.push({
-      text: responseText,
-      timestamp: new Date().toISOString()
-    });
-
-    // Keep only the last 20 responses per tab
-    if (responses.length > 20) {
-      responses = responses.slice(-20);
-    }
-
-    // Save back to storage with tab-specific key
-    await chrome.storage.local.set({ [storageKey]: responses });
-    console.log('[RESPONSE HISTORY] Saved response to', storageKey, '. Total responses:', responses.length);
-  } catch (error) {
-    console.error('[RESPONSE HISTORY] Error saving response:', error);
-  }
-}
 
 async function attemptToSendMessage(message) {
   const inputDiv = getPromptInput();
@@ -149,14 +85,14 @@ async function attemptToSendMessage(message) {
     if (!loading && inputDiv) {
       console.log("Setting message in input div");
       const hiddenTA = getHiddenTextarea();
-      console.log("[QUEUE DEBUG] Hidden textarea present:", !!hiddenTA);
-      console.log("[QUEUE DEBUG] Original message length:", message.length);
+
+
 
       if (hiddenTA) {
-        console.log("[QUEUE DEBUG] hiddenTA value BEFORE:", JSON.stringify(hiddenTA.value));
+
         // 1. Put the message directly in the hidden textarea (source-of-truth for ProseMirror)
         hiddenTA.value = message;
-        console.log("[QUEUE DEBUG] hiddenTA value AFTER:", JSON.stringify(hiddenTA.value));
+
 
         // 2. Dispatch an input event so ProseMirror ingests the textarea's contents
         hiddenTA.dispatchEvent(
@@ -165,19 +101,19 @@ async function attemptToSendMessage(message) {
 
         // 3. Update the visible div for user feedback with proper paragraphs
         setProseMirrorContent(inputDiv, message);
-        console.log("[QUEUE DEBUG] Visible div after setProseMirrorContent – innerText:", JSON.stringify(inputDiv.innerText));
-        console.log("[QUEUE DEBUG] Visible div after setProseMirrorContent – innerHTML:", inputDiv.innerHTML);
+
+
       } else {
         // Fallback if the textarea isn't present (older UI)
         setProseMirrorContent(inputDiv, message);
-        console.log("[QUEUE DEBUG] Fallback div update – innerText:", JSON.stringify(inputDiv.innerText));
+
       }
 
       // add 100ms delay
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Ensure React updates its internal state in the div version as well
-      console.log("[QUEUE DEBUG] Dispatching synthetic input event on visible div");
+
       inputDiv.dispatchEvent(
         new InputEvent("input", { bubbles: true, cancelable: true })
       );
@@ -488,6 +424,7 @@ setInterval(() => {
   }
 })();
 
+// Listener for messages from popup or background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "addToQueue") {
     // No more pro check - all features are free
@@ -496,8 +433,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     updateMessageList();
     processMessageQueue();
     sendResponse({ success: true });
+  } else if (request.action === "getConversation") {
+    // Scrape full conversation from DOM
+    const conversation = [];
+    const messageElements = document.querySelectorAll('[data-message-author-role="assistant"]');
+
+    messageElements.forEach((el) => {
+      // Helper to get text content
+      const textContent = el.innerText || el.textContent || '';
+
+      // Clean up text: replace 2 or more newlines with a single newline to be compact
+      // The user wants to remove 'double line break' in the download content
+      let cleanText = textContent.trim().replace(/\n{2,}/g, '\n');
+
+      if (cleanText) {
+        conversation.push(cleanText);
+      }
+    });
+
+    const fullText = conversation.join('\n\n');
+    sendResponse({ conversation: fullText });
   }
-  return true;
+  return true; // Keep channel open for async response if needed
 });
 
 async function processMessageQueue() {
@@ -587,11 +544,6 @@ function setupContinueButtonWatcher() {
     } else if (wasGenerating) {
       // ChatGPT just finished generating
       wasGenerating = false;
-
-      // Wait a bit for the DOM to settle, then capture the response
-      setTimeout(() => {
-        captureLastResponse();
-      }, 500);
     }
   });
 
@@ -608,40 +560,7 @@ function setupContinueButtonWatcher() {
 }
 
 // Function to capture the last ChatGPT response
-function captureLastResponse() {
-  try {
-    // Find all assistant message containers
-    // ChatGPT uses data-message-author-role="assistant" for AI responses
-    const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
 
-    if (assistantMessages.length === 0) {
-      console.log('[RESPONSE HISTORY] No assistant messages found');
-      return;
-    }
-
-    // Get the last assistant message
-    const lastMessage = assistantMessages[assistantMessages.length - 1];
-
-    // Avoid capturing the same response multiple times
-    if (lastMessage === lastResponseElement) {
-      console.log('[RESPONSE HISTORY] Response already captured');
-      return;
-    }
-
-    lastResponseElement = lastMessage;
-
-    // Extract the text content from the message
-    // The actual text is usually in a div with class containing "markdown" or direct text content
-    const messageText = lastMessage.innerText || lastMessage.textContent || '';
-
-    if (messageText && messageText.trim().length > 0) {
-      console.log('[RESPONSE HISTORY] Capturing response:', messageText.substring(0, 100) + '...');
-      saveResponseToHistory(messageText.trim());
-    }
-  } catch (error) {
-    console.error('[RESPONSE HISTORY] Error capturing response:', error);
-  }
-}
 
 // Utility: returns the current prompt input element (textarea or contentEditable div)
 function getPromptInput() {
@@ -683,7 +602,7 @@ function getHiddenTextarea() {
 
 // For ProseMirror contentEditable div: insert text preserving newlines
 function setProseMirrorContent(divEl, text) {
-  console.log("[QUEUE DEBUG] setProseMirrorContent invoked. Line count:", text.split(/\n/).length);
+
   if (!divEl) return;
   divEl.focus();
   // Clear current content
@@ -692,7 +611,7 @@ function setProseMirrorContent(divEl, text) {
 
   const lines = text.split(/\n/);
   lines.forEach((line, idx) => {
-    console.log("[QUEUE DEBUG] Inserting line", idx, JSON.stringify(line));
+
     if (idx > 0) {
       // create a new paragraph
       document.execCommand("insertParagraph", false, null);
@@ -701,5 +620,5 @@ function setProseMirrorContent(divEl, text) {
       document.execCommand("insertText", false, line);
     }
   });
-  console.log("[QUEUE DEBUG] divEl.innerHTML after insert:", divEl.innerHTML);
+
 }
