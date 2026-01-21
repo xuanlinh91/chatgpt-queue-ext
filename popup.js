@@ -92,37 +92,52 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 
+  // Function to trigger download
+  function triggerDownload() {
+    const downloadCount = parseInt(document.getElementById("downloadCount").value) || 1;
+
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      const currentTab = tabs[0];
+      // Send message to content script to get conversation
+      chrome.tabs.sendMessage(currentTab.id, { action: "getConversation", count: downloadCount }, function (response) {
+        if (chrome.runtime.lastError) {
+          console.error(chrome.runtime.lastError);
+          alert("Could not connect to the ChatGPT page. Make sure you are on a ChatGPT tab and reload the page.");
+          return;
+        }
+
+        if (!response || !response.conversation) {
+          alert("No conversation found or empty.");
+          return;
+        }
+
+        // Create blob and download
+        const blob = new Blob([response.conversation], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chatgpt-conversation-${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    });
+  }
+
   // Handle download full conversation button click
   const downloadFullConversationButton = document.getElementById("downloadFullConversationButton");
   if (downloadFullConversationButton) {
-    downloadFullConversationButton.addEventListener("click", function () {
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        const currentTab = tabs[0];
-        // Send message to content script to get conversation
-        chrome.tabs.sendMessage(currentTab.id, { action: "getConversation" }, function (response) {
-          if (chrome.runtime.lastError) {
-            console.error(chrome.runtime.lastError);
-            alert("Could not connect to the ChatGPT page. Make sure you are on a ChatGPT tab and reload the page.");
-            return;
-          }
+    downloadFullConversationButton.addEventListener("click", triggerDownload);
+  }
 
-          if (!response || !response.conversation) {
-            alert("No conversation found or empty.");
-            return;
-          }
-
-          // Create blob and download
-          const blob = new Blob([response.conversation], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `chatgpt-conversation-${new Date().toISOString().split('T')[0]}.txt`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        });
-      });
+  // Handle Enter key press on download count input
+  const downloadCountInput = document.getElementById("downloadCount");
+  if (downloadCountInput) {
+    downloadCountInput.addEventListener("keypress", function (event) {
+      if (event.key === "Enter") {
+        triggerDownload();
+      }
     });
   }
 });

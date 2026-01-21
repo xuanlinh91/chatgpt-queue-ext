@@ -367,10 +367,15 @@ function handleInput(event) {
 
 function scheduleQueueProcessing() {
   setTimeout(async () => {
-    if (!sendingInProgress && messageQueue.length > 0) {
-      await processMessageQueue();
+    try {
+      if (!sendingInProgress && messageQueue.length > 0) {
+        await processMessageQueue();
+      }
+    } catch (err) {
+      console.error("Error in queue processing loop:", err);
+    } finally {
+      scheduleQueueProcessing();
     }
-    scheduleQueueProcessing();
   }, 1000);
 }
 setInterval(() => {
@@ -434,7 +439,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     processMessageQueue();
     sendResponse({ success: true });
   } else if (request.action === "getConversation") {
-    // Scrape full conversation from DOM
+    // Scrape conversation from DOM
     const conversation = [];
     const messageElements = document.querySelectorAll('[data-message-author-role="assistant"]');
 
@@ -451,7 +456,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
 
-    const fullText = conversation.join('\n');
+    // Get the count parameter, default to all messages if not specified
+    const count = request.count || conversation.length;
+
+    // Get the last N responses
+    const limitedConversation = conversation.slice(-count);
+    const fullText = limitedConversation.join('\n');
     sendResponse({ conversation: fullText });
   }
   return true; // Keep channel open for async response if needed
@@ -470,9 +480,40 @@ async function processMessageQueue() {
 
   // Check if we need to wait due to delay
   const now = Date.now();
-  const result = await chrome.storage.local.get(["promptDelay"]);
-  const promptDelay = result.promptDelay || 0;
+  let promptDelay = 0;
+
+  console.log("Processing message queue. Current queue length:", messageQueue.length);
+
+  try {
+    if (chrome && chrome.storage && chrome.storage.local) {
+      console.log("Attempting to read promptDelay from chrome.storage.local");
+      const result = await new Promise((resolve, reject) => {
+        try {
+          chrome.storage.local.get(["promptDelay"], (res) => {
+            if (chrome.runtime.lastError) {
+              console.warn("Storage access error:", chrome.runtime.lastError);
+              resolve({});
+            } else {
+              console.log("Successfully read promptDelay:", res);
+              resolve(res);
+            }
+          });
+        } catch (e) {
+          console.warn("Synchronous storage access error:", e);
+          resolve({});
+        }
+      });
+      promptDelay = result.promptDelay || 0;
+    } else {
+      console.warn("chrome.storage.local is not available. chrome object:", chrome);
+    }
+  } catch (err) {
+    console.warn("Error accessing promptDelay from storage, default to 0:", err);
+    promptDelay = 0;
+  }
+
   const timeToWait = Math.max(0, lastMessageTime + promptDelay - now);
+  console.log(`Calculated time to wait: ${timeToWait}ms (Last message: ${lastMessageTime}, Delay: ${promptDelay}, Now: ${now})`);
 
   if (timeToWait > 0) {
     // Clear any existing countdown

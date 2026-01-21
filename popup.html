@@ -148,12 +148,22 @@
       color: #3b82f6;
     }
 
-    #promptDelay {
+    #promptDelay,
+    #downloadCount {
       width: 100%;
       padding: 10px;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       font-size: 14px;
+      background-color: white;
+      transition: all 0.2s ease;
+    }
+
+    #promptDelay:focus,
+    #downloadCount:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
 
     .setting-group label {
@@ -236,9 +246,11 @@
           </div>
         </div>
         <div class="setting-group" style="margin-top: 16px;">
-          <button id="downloadFullConversationButton" class="button" style="width: 100%;">
+          <label for="downloadCount">Number of responses to download</label>
+          <input type="number" id="downloadCount" min="1" max="20" value="1" step="1" placeholder="1">
+          <button id="downloadFullConversationButton" class="button" style="width: 100%; margin-top: 12px;">
             <i class="fas fa-file-export"></i>
-            Download Full Conversation
+            Download Conversation
           </button>
         </div>
       </div>
